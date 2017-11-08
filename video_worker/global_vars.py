@@ -26,7 +26,7 @@ HLS_SUBSTITUTE = 'mobile_low'
 
 # For BOTO Multipart uploader
 MULTI_UPLOAD_BARRIER = 2000000000
-BOTO_TIMEOUT = 60
+BOTO_TIMEOUT = '60'
 
 # Settings for testing
 TEST_VIDEO_DIR = os.path.join(

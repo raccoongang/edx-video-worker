@@ -19,7 +19,13 @@ from celeryapp import deliverable_route
 from video_worker.config import WorkerSetup
 from video_worker.generate_encode import CommandGenerate
 from video_worker.generate_delivery import Deliverable
-from video_worker.global_vars import HOME_DIR, ENCODE_WORK_DIR, VAL_TRANSCODE_STATUS, NODE_TRANSCODE_STATUS
+from video_worker.global_vars import (
+    HOME_DIR,
+    ENCODE_WORK_DIR,
+    VAL_TRANSCODE_STATUS,
+    NODE_TRANSCODE_STATUS,
+    BOTO_TIMEOUT
+)
 from video_worker.reporting import Output
 from video_worker.validate import ValidateVideo
 from video_worker.video_images import VideoImages
@@ -29,7 +35,7 @@ try:
 except:
     pass
 
-boto.config.set('Boto', 'http_socket_timeout', '10')
+boto.config.set('Boto', 'http_socket_timeout', BOTO_TIMEOUT)
 
 logger = logging.getLogger(__name__)
 
@@ -51,18 +57,7 @@ class VideoWorker(object):
                 'instance_config.yaml'
             )
         )
-
-        # Working Dir Config
-        self.workdir = kwargs.get('workdir', None)
-        if self.workdir is None:
-            if self.jobid is None:
-                self.workdir = ENCODE_WORK_DIR
-            else:
-                self.workdir = os.path.join(ENCODE_WORK_DIR, self.jobid)
-
-            if not os.path.exists(ENCODE_WORK_DIR):
-                os.mkdir(ENCODE_WORK_DIR)
-
+        self.workdir = kwargs.get('workdir', self.determine_workdir())
         self.ffcommand = None
         self.source_file = kwargs.get('source_file', None)
         self.output_file = None
@@ -70,6 +65,14 @@ class VideoWorker(object):
         # Pipeline Steps
         self.encoded = False
         self.delivered = False
+
+    def determine_workdir(self):
+        if not os.path.exists(ENCODE_WORK_DIR):
+            os.mkdir(ENCODE_WORK_DIR)
+        if self.jobid is None:
+            return ENCODE_WORK_DIR
+        else:
+            return os.path.join(ENCODE_WORK_DIR, self.jobid)
 
     def test(self):
         """
@@ -139,6 +142,9 @@ class VideoWorker(object):
         # generate video images command and update S3 and edxval
         # run against 'hls' encode only
         if self.encode_profile == 'hls':
+            # Run HLS encode
+            self._hls_pipeline()
+            # Auto-video Images
             VideoImages(
                 video_object=self.VideoObject,
                 work_dir=self.workdir,
@@ -146,8 +152,7 @@ class VideoWorker(object):
                 jobid=self.jobid,
                 settings=self.settings
             ).create_and_update()
-            # Run HLS encode
-            self._hls_pipeline()
+
         else:
             self._static_pipeline()
 
@@ -190,14 +195,23 @@ class VideoWorker(object):
 
         os.chdir(self.workdir)
 
-        V1 = Chunkey(
-            mezz_file=os.path.join(self.workdir, self.source_file),
-            DELIVER_BUCKET=self.settings['edx_s3_endpoint_bucket'],
-            clean=False
-        )
+        if self.settings['onsite_worker']:
+            hls_chunk_instance = Chunkey(
+                mezz_file=os.path.join(self.workdir, self.source_file),
+                DELIVER_BUCKET=self.settings['edx_s3_endpoint_bucket'],
+                clean=False,
+                ACCESS_KEY_ID=self.settings['edx_access_key_id'],
+                SECRET_ACCESS_KEY=self.settings['edx_secret_access_key']
+            )
+        else:
+            hls_chunk_instance = Chunkey(
+                mezz_file=os.path.join(self.workdir, self.source_file),
+                DELIVER_BUCKET=self.settings['edx_s3_endpoint_bucket'],
+                clean=False,
+            )
 
-        if V1.complete:
-            self.endpoint_url = V1.manifest_url
+        if hls_chunk_instance.complete:
+            self.endpoint_url = hls_chunk_instance.manifest_url
 
     def _engine_intake(self):
         """
@@ -208,7 +222,13 @@ class VideoWorker(object):
             return
 
         if self.source_file is None:
-            conn = S3Connection()
+            if self.settings['onsite_worker']:
+                conn = S3Connection(
+                    self.settings['veda_access_key_id'],
+                    self.settings['veda_secret_access_key']
+                )
+            else:
+                conn = S3Connection()
             try:
                 bucket = conn.get_bucket(self.settings['veda_s3_hotstore_bucket'])
             except S3ResponseError:
@@ -299,11 +319,15 @@ class VideoWorker(object):
         Validate encode by matching (w/in 5 sec) encode duration,
         as well as standard validation tests
         """
-        self.encoded = ValidateVideo(
-            filepath=os.path.join(self.workdir, self.output_file),
-            product_file=True,
-            VideoObject=self.VideoObject
-        ).valid
+        if self.output_file is None:
+            self.encoded = False
+            return
+        else:
+            self.encoded = ValidateVideo(
+                filepath=os.path.join(self.workdir, self.output_file),
+                product_file=True,
+                VideoObject=self.VideoObject
+            ).valid
 
     def _deliver_file(self):
         """

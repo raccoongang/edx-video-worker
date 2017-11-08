@@ -1,4 +1,14 @@
 ---
+
+## NOTE!
+# NEVER COMMIT A SECRET HERE!
+#
+# This file is meant as a guide, but should not be assumed to deploy to production.
+# To deploy changes to this file to production,
+# change in @edx/veda-secure/shared/instance_config.yaml
+#
+#
+
 # ---
 # Database information
 # ---
@@ -77,13 +87,19 @@ main_celery_queue: encode_worker
 largefile_queue_barrier: 1000000000
 largefile_celery_queue: large_encode_worker
 celery_stat_queue: transcode_stat
-celery_receiver_queue: encode_worker,large_encode_worker
+celery_worker_queue: encode_worker,large_encode_worker
 celery_threads:
 
-## CLOUD
+## CLOUD/ONSITE
+onsite_worker: False
 rabbitmq_broker: ""
 rabbitmq_pass: ""
 rabbitmq_user: ""
+
+edx_access_key_id:
+edx_secret_access_key:
+veda_access_key_id:
+veda_secret_access_key:
 
 # ---
 # Shotgun Variables (internal mediateam)
