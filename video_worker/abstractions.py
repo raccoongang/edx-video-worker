@@ -84,7 +84,7 @@ class Video(object):
                 'content-type': 'application/json'
             }
             x = requests.get(
-                '/'.join((settings['veda_api_url'], 'videos', '')),
+                '/'.join((settings['veda_api_url'], 'videos')),
                 params=data,
                 headers=headers
             )

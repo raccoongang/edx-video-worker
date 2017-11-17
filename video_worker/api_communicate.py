@@ -95,7 +95,7 @@ class UpdateAPIStatus:
         data = {'edx_id': self.VideoObject.veda_id}
 
         y = requests.get(
-            '/'.join((settings['veda_api_url'], 'videos', '')),
+            '/'.join((settings['veda_api_url'], 'videos')),
             params=data,
             headers=self.veda_headers,
             timeout=settings['global_timeout']
@@ -173,7 +173,7 @@ class UpdateAPIStatus:
             self.VideoObject.course_url = [self.VideoObject.course_url]
 
         r1 = requests.get(
-            '/'.join((settings['val_api_url'], self.VideoObject.val_id, '')),
+            '/'.join((settings['val_api_url'], self.VideoObject.val_id)),
             headers=self.val_headers,
             timeout=settings['global_timeout']
         )
@@ -191,7 +191,7 @@ class UpdateAPIStatus:
 
             # Final Connection
             r2 = requests.post(
-                settings['val_api_url'],
+                settings['val_api_url'] + '/',
                 data=json.dumps(val_data),
                 headers=self.val_headers,
                 timeout=settings['global_timeout']
@@ -205,7 +205,7 @@ class UpdateAPIStatus:
             # ID is previously extant
             val_api_return = ast.literal_eval(r1.text)
             # extract course ids, courses will be a list of dicts, [{'course_id': 'image_name'}]
-            course_ids = reduce(operator.concat, (d.keys() for d in val_api_return['courses']))
+            course_ids = reduce(operator.concat, (d for d in val_api_return['courses']))
 
             # VAL will not allow duped studio urls to be sent, so
             # we must scrub the data

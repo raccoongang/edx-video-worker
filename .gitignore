@@ -22,3 +22,5 @@ coverage/
 .coverage
 
 test_videofiles/
+
+instance_config.yaml

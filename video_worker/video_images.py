@@ -170,7 +170,7 @@ class VideoImages(object):
                 }
 
                 response = requests.post(
-                    self.settings['val_video_images_url'],
+                    self.settings['val_video_images_url'] + '/',
                     data=json.dumps(data),
                     headers=val_headers,
                     timeout=self.settings['global_timeout']
